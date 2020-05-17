@@ -31,8 +31,9 @@
 
 
 // Change to match your board! //
-#define F_CPU 16000000UL  
-
+#ifndef __F_CPU__
+#define F_CPU 16000000UL 
+#endif
 
 #ifndef ALIBC_OLD
 	#include <util/delay.h>

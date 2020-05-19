@@ -1,14 +1,20 @@
 /*
-    File:       HD44780.h
+    File:       3w_HD44780_8bit.h
     Version:    0.1.0
     Date:       Feb. 21, 2013
 	License:	GPL v2
     
-	HD44780 LCD 4-bit IO mode Driver
+	C header file for HD44780 LCD module using a 74HCT164 serial in, parallel
+	out shift register to operate the LCD in 8-bit mode.  Example schematic
+	using atmega128 and 4x20 LCD available here: 
+	http://www.pocketmagic.net/?p=3785
     
+	* Based on http://www.scienceprog.com/interfacing-lcd-to-atmega-using-two-wires
+	* and http://www.micahcarrick.com/avr-3-wire-hd44780-lcd-interface-avr-gcc.html
+	 
     ****************************************************************************
     Copyright (C) 2013 Radu Motisan  <radu.motisan@gmail.com>
-
+	
 	http://www.pocketmagic.net
 
     This program is free software; you can redistribute it and/or modify
@@ -27,88 +33,77 @@
     ****************************************************************************
  */
 
-#pragma once
-#include <stdio.h>
+#include <avr/io.h>
 #include "timeout.h"
+#include <util/delay.h>
 
-class HD44780
-{
-private:
-    static const int LCD_LINES = 4;          // number of visible lines of the display
-    static const int LCD_DISP_LENGTH = 20;   // visibles characters per line of the display
-    static const int LCD_START_LINE1 = 0x00; // DDRAM address of first char of line 1
-    static const int LCD_START_LINE2 = 0x40; // DDRAM address of first char of line 2
-    static const int LCD_START_LINE3 = 0x14; // DDRAM address of first char of line 3
-    static const int LCD_START_LINE4 = 0x54; // DDRAM address of first char of line 4
-    static const int LCD_CGRAM = 0x6;        // DB6: set CG RAM address
-    static const int LCD_DDRAM = 0x7;        // DB7: set DD RAM address
-
-    // instruction register bit positions, see HD44780U data sheet
-    static const int LCD_CMD_HOME = 0x02;            // cursor home
-    static const int LCD_CMD_ENTRY_DEC = 0x04;       // decrement, no shift
-    static const int LCD_CMD_ENTRY_DEC_SHIFT = 0x05; // decrement with shift
-    static const int LCD_CMD_ENTRY_INC = 0x06;       // increment, no shift
-    static const int LCD_CMD_ENTRY_INC_SHIFT = 0x07; // increment with shift
-    static const int LCD_CMD_CLEAR = 0x01;           // clear, cursor home
-    static const int LCD_CMD_OFF = 0x08;             // display off
-    static const int LCD_CMD_ON = 0x0C;              // display on, cursor off
-    static const int LCD_CMD_ON_BLINK = 0x0D;        // display on, cursor off, blink char
-    static const int LCD_CMD_ON_CURSOR = 0x0E;       // display on, cursor on
-    static const int LCD_CMD_ON_CURSOR_BLINK = 0x0F; // display on, cursor on, blink char
-    static const int LCD_CMD_CURSOR_LEFT = 0x10;     // decrement cursor (left)
-    static const int LCD_CMD_CURSOR_RIGHT = 0x14;    // increment cursor (right)
-    static const int LCD_CMD_SHIFT_LEFT = 0x18;      // shift (left)
-    static const int LCD_CMD_SHIFT_RIGHT = 0x1C;     // shift (right)
-    // function set: set interface data length and number of display lines
-    static const int LCD_FUNCTION_4BIT_1LINE = 0x20; // 4-bit interface, single line, 5x7 dots
-    static const int LCD_FUNCTION_4BIT_2LINE = 0x28; // 4-bit interface, dual line,   5x7 dots
-    static const int LCD_FUNCTION_8BIT_1LINE = 0x30; // 8-bit interface, single line, 5x7 dots
-    static const int LCD_FUNCTION_8BIT_2LINE = 0x38; // 8-bit interface, dual line,   5x7 dots
-
-    int g_nCurrentLine;
-    volatile uint8_t *m_pPorts[6], //RS, E, D4, D5, D6, D7
-        m_pDqs[6];
-
-    void lcd_e_high();
-    void lcd_e_low();
-    void lcd_rs_high();
-    void lcd_rs_low();
-
-    // flush channel E
-    void lcd_toggle_e(void);
-    //  send a character or an instruction to the LCD
-    void lcd_write(uint8_t data, uint8_t rs);
-    //   send an instruction to the LCD
-    void lcd_instr(uint8_t instr);
-    //
-    volatile uint8_t *Port2DDR(volatile uint8_t *port)
-    {
-        return port - 1;
-    }
-
-public:
-    //   Initialize LCD to 4 bit I/O mode, using the given connections, in order
-    //   RS, E, D4, D5, D6, D7
-    void lcd_init(volatile uint8_t *port_rs, volatile uint8_t dq_rs,
-                  volatile uint8_t *port_e, volatile uint8_t dq_e,
-                  volatile uint8_t *port_d4, volatile uint8_t dq_d4,
-                  volatile uint8_t *port_d5, volatile uint8_t dq_d5,
-                  volatile uint8_t *port_d6, volatile uint8_t dq_d6,
-                  volatile uint8_t *port_d7, volatile uint8_t dq_d7);
-    //   send a character to the LCD
-    void lcd_char(uint8_t data);
-    //   send a null terminated string to the LCD eg. char x[10]="hello!";
-    void lcd_string(char *text);
-    void lcd_string_format(char *szFormat, ...);
-    //   Set cursor to specified position
-    //           Input:    x  horizontal position  (0: left most position)
-    //                     y  vertical position    (0: first line)
-    void lcd_gotoxy(uint8_t x, uint8_t y);
-    //   Move cursor on specified line
-    void lcd_setline(uint8_t line);
-    //   Clear display and set cursor to home position
-    void lcd_clrscr(void);
-    // FUNCTION: lcd_home
-    //   Set cursor to home position
-    void lcd_cursor_home(void);
+class HD44780_3W_8BIT {
+	static const int LCD_LINES				 = 4;	 // number of visible lines of the display
+	static const int LCD_DISP_LENGTH		 = 20;   // visibles characters per line of the display
+	static const int LCD_START_LINE1  		 = 0x00; // DDRAM address of first char of line 1
+	static const int LCD_START_LINE2  		 = 0x40; // DDRAM address of first char of line 2
+	static const int LCD_START_LINE3  		 = 0x14; // DDRAM address of first char of line 3
+	static const int LCD_START_LINE4  		 = 0x54; // DDRAM address of first char of line 4
+	static const int LCD_CGRAM				 = 0x6;  // DB6: set CG RAM address
+	static const int LCD_DDRAM             	 = 0x7;   // DB7: set DD RAM address
+	
+	// instruction register bit positions, see HD44780U data sheet
+	static const int LCD_CMD_HOME            = 0x02; // cursor home 
+	static const int LCD_CMD_ENTRY_DEC       = 0x04; // decrement, no shift 
+	static const int LCD_CMD_ENTRY_DEC_SHIFT = 0x05; // decrement with shift 
+	static const int LCD_CMD_ENTRY_INC       = 0x06; // increment, no shift 
+	static const int LCD_CMD_ENTRY_INC_SHIFT = 0x07; // increment with shift 
+	static const int LCD_CMD_CLEAR           = 0x01; // clear, cursor home 
+	static const int LCD_CMD_OFF             = 0x08; // display off 
+	static const int LCD_CMD_ON              = 0x0C; // display on, cursor off 
+	static const int LCD_CMD_ON_BLINK        = 0x0D; // display on, cursor off, blink char 
+	static const int LCD_CMD_ON_CURSOR       = 0x0E; // display on, cursor on 
+	static const int LCD_CMD_ON_CURSOR_BLINK = 0x0F; // display on, cursor on, blink char 
+	static const int LCD_CMD_CURSOR_LEFT     = 0x10; // decrement cursor (left) 
+	static const int LCD_CMD_CURSOR_RIGHT    = 0x14; // increment cursor (right) 
+	static const int LCD_CMD_SHIFT_LEFT      = 0x18; // shift (left) 
+	static const int LCD_CMD_SHIFT_RIGHT     = 0x1C; // shift (right)
+	// function set: set interface data length and number of display lines
+	static const int LCD_FUNCTION_4BIT_1LINE = 0x20; // 4-bit interface, single line, 5x7 dots
+	static const int LCD_FUNCTION_4BIT_2LINE = 0x28; // 4-bit interface, dual line,   5x7 dots
+	static const int LCD_FUNCTION_8BIT_1LINE = 0x30; // 8-bit interface, single line, 5x7 dots
+	static const int LCD_FUNCTION_8BIT_2LINE = 0x38; // 8-bit interface, dual line,   5x7 dots
+	
+	private:
+	volatile uint8_t	*m_pportRsData, m_dqrsdata, 
+						*m_pportCLK, m_dqclk,
+						*m_pportE, m_dqe;
+	uint8_t m_nCurrentLine;
+	
+	void lcd_init();
+	void lcd_load_byte(uint8_t b);
+	void lcd_toggle_e(void);
+	void lcd_send_cmd(void);
+	void lcd_send_char(void);
+	
+	//
+	volatile uint8_t* Port2DDR(volatile uint8_t *port) {
+		return port - 1;
+	}
+	
+	public:
+	void Init(volatile uint8_t  *portRsData, uint8_t  dq_rs_data, 
+			volatile uint8_t  *portCLK, uint8_t dq_clk, 
+			volatile uint8_t  *portE, uint8_t dq_e);
+	
+	// content display
+	void lcd_char(const char c);
+	void lcd_string(char *text);
+	void lcd_string_format(char *format,...);
+	
+	// cursor
+	void lcd_cursor_home();
+	void lcd_cursor_gotoxy(uint8_t line, uint8_t pos);
+	void lcd_cursor_setline(uint8_t line);
+	
+	// clean
+	void lcd_clrscr();
 };
+
+
+

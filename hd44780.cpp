@@ -1,11 +1,17 @@
 /*
-    File:       HD44780.cpp
+    File:       3w_HD44780_8bit.cpp
     Version:    0.1.0
     Date:       Feb. 21, 2013
 	License:	GPL v2
     
-	HD44780 LCD 4-bit IO mode Driver
+	C header file for HD44780 LCD module using a 74HCT164 serial in, parallel
+	out shift register to operate the LCD in 8-bit mode.  Example schematic
+	using atmega128 and 4x20 LCD available here: 
+	http://www.pocketmagic.net/?p=3785
     
+	* Based on http://www.scienceprog.com/interfacing-lcd-to-atmega-using-two-wires
+	* and http://www.micahcarrick.com/avr-3-wire-hd44780-lcd-interface-avr-gcc.html
+	 
     ****************************************************************************
     Copyright (C) 2013 Radu Motisan  <radu.motisan@gmail.com>
 
@@ -27,177 +33,129 @@
     ****************************************************************************
  */
 
-#include <avr/io.h>
-#include "hd44780.h"
 
-// index 0 is pin rs
-void HD44780::lcd_rs_high()
-{
-	*m_pPorts[0] |= (1 << m_pDqs[0]);
-}
+#include "3w_hd44780_8bit.h"
+#include <stdio.h>
 
-void HD44780::lcd_rs_low()
-{
-	*m_pPorts[0] &= ~(1 << m_pDqs[0]);
-}
-
-// index 1 is pin e
-void HD44780::lcd_e_high()
-{
-	*m_pPorts[1] |= (1 << m_pDqs[1]);
-}
-
-void HD44780::lcd_e_low()
-{
-	*m_pPorts[1] &= ~(1 << m_pDqs[1]);
-}
-
-//  flush channel E
-void HD44780::lcd_toggle_e(void)
-{
-	lcd_e_high();
-	_delay_us(5);
-	lcd_e_low();
-}
-
-int intpow(uint8_t x, uint8_t e)
-{
-	int p = 1;
-	for (int i = 0; i < e; i++)
-		p = p * x;
-	return p;
-}
-//  send a character or an instruction to the LCD
-void HD44780::lcd_write(uint8_t data, uint8_t rs)
-{
-	// we cannot check LCD status (no read available) , so we will assume a default delay to wait for lcd to be ready
-	_delay_us(400);
-	//check write type
-	if (rs)
-		lcd_rs_high(); //write data
-	else
-		lcd_rs_low(); //write instruction
-
-	// output high nibble first
-	for (int i = 2; i < 6; i++)
-	{
-		*(m_pPorts[i]) &= ~(1 << m_pDqs[i]);
-		uint8_t mask = 0x10 * intpow(2, i - 2); //0x10, 0x20, 0x40, 0x80
-
-		if (data & mask)
-			*(m_pPorts[i]) |= (1 << m_pDqs[i]);
-	}
-	_delay_us(100);
-	lcd_toggle_e();
-
-	// output low nibble
-	for (int i = 2; i < 6; i++)
-	{
-		*(m_pPorts[i]) &= ~(1 << m_pDqs[i]);
-		uint8_t mask = 0x01 * intpow(2, i - 2); //0x01, 0x02, 0x04, 0x08
-		if (data & mask)
-			*(m_pPorts[i]) |= (1 << m_pDqs[i]);
-	}
-	_delay_us(100);
-	lcd_toggle_e();
-}
-
-//   send an instruction to the LCD
-void HD44780::lcd_instr(uint8_t instr)
-{
-	lcd_write(instr, 0);
-}
-
-//   Initialize LCD to 4 bit I/O mode
-void HD44780::lcd_init(volatile uint8_t *port_rs, volatile uint8_t dq_rs,
-					   volatile uint8_t *port_e, volatile uint8_t dq_e,
-					   volatile uint8_t *port_d4, volatile uint8_t dq_d4,
-					   volatile uint8_t *port_d5, volatile uint8_t dq_d5,
-					   volatile uint8_t *port_d6, volatile uint8_t dq_d6,
-					   volatile uint8_t *port_d7, volatile uint8_t dq_d7)
-{
+void HD44780_3W_8BIT::Init(volatile uint8_t  *portRsData, uint8_t  dq_rs_data,
+							volatile uint8_t  *portCLK, uint8_t dq_clk, volatile uint8_t  *portE, uint8_t dq_e) {
 	// save globals
-	m_pPorts[0] = port_rs;
-	m_pDqs[0] = dq_rs;
-	m_pPorts[1] = port_e;
-	m_pDqs[1] = dq_e;
-	m_pPorts[2] = port_d4;
-	m_pDqs[2] = dq_d4;
-	m_pPorts[3] = port_d5;
-	m_pDqs[3] = dq_d5;
-	m_pPorts[4] = port_d6;
-	m_pDqs[4] = dq_d6;
-	m_pPorts[5] = port_d7;
-	m_pDqs[5] = dq_d7;
-	// configure all port bits as output (LCD data and control lines on different ports
-	for (int i = 0; i < 6; i++)
-	{
-		*Port2DDR(m_pPorts[i]) |= (1 << m_pDqs[i]);
-	}
-
-	// 30ms delay while LCD powers on */
-	_delay_ms(30);
-
-	// Write 0x30 to LCD and wait 5 mS for the instruction to complete */
-	lcd_instr(0x30);
-	lcd_toggle_e();
-	_delay_ms(5);
-
-	// Write 0x30 to LCD and wait 160 uS for instruction to complete */
-	lcd_instr(0x30);
-	lcd_toggle_e();
-	_delay_us(120);
-
-	// Write 0x30 AGAIN to LCD and wait 160 uS */
-	lcd_instr(0x30);
-	lcd_toggle_e();
-	_delay_us(120);
-
-	// Set function and wait 40uS */
-	lcd_instr(LCD_FUNCTION_4BIT_2LINE); //function
-	lcd_toggle_e();
-
-	// Turn off the display and wait 40uS */
-	lcd_instr(LCD_CMD_OFF);
-	lcd_toggle_e();
-
-	// Clear display and wait 1.64mS */
-	lcd_instr(LCD_CMD_CLEAR);
-	lcd_toggle_e();
-	_delay_ms(2);
-
-	/* Set entry mode and wait 40uS */
-	lcd_instr(LCD_CMD_ENTRY_INC); //entry mode
-	lcd_toggle_e();
-
-	/* Turn display back on and wait 40uS */
-	lcd_instr(LCD_CMD_ON);
-	lcd_toggle_e();
+	m_pportRsData = portRsData;
+	m_dqrsdata = dq_rs_data;
+	m_pportCLK = portCLK;
+	m_dqclk = dq_clk;
+	m_pportE = portE;
+	m_dqe = dq_e;
+	
+	// init data and clk ports
+	*m_pportRsData &= ~(1<<m_dqrsdata); //set pins to LOW
+	*m_pportCLK &= ~(1<<m_dqclk); //set pins to LOW
+	*m_pportE &= ~(1<<m_dqe); //set pins to LOW
+	
+	*Port2DDR(m_pportRsData) |= (1<<m_dqrsdata);//Enable pins as outputs
+	*Port2DDR(m_pportCLK) |= (1<<m_dqclk);//Enable pins as outputs
+	*Port2DDR(m_pportE) |= (1<<m_dqe);//Enable pins as outputs
+	
+	// init LCD
+	lcd_init();
 }
 
-//   send a character to the LCD
-void HD44780::lcd_char(uint8_t data)
+/*
+ * Loads a byte into the shift register (74'164).  Does NOT load into the LCD.
+ *
+ * Parameters:
+ *      b        The byte to load into the '164.
+*/
+void HD44780_3W_8BIT::lcd_load_byte(uint8_t b)
 {
-	if (data == '\n')
-	{
-		if (g_nCurrentLine >= LCD_LINES - 1)
-			lcd_setline(0);
-		else
-			lcd_setline(g_nCurrentLine + 1);
+	// make sure clock is low 
+	*m_pportCLK &= ~(1<<m_dqclk);
+	
+	for(int i=0; i<8; i++) {
+		// loop through bits 	
+		if (b & 0x80) 
+			*m_pportRsData |=(1<<m_dqrsdata); // this bit is high 
+		else 
+			*m_pportRsData &= ~(1<<m_dqrsdata); //this bit is low 
+		// next bit
+		b = b << 1;
+		// pulse the the shift register clock *
+		*m_pportCLK |= (1<<m_dqclk);
+		*m_pportCLK &= ~(1<<m_dqclk);
 	}
-	else
-		lcd_write(data, 1);
 }
 
-//   send a null terminated string to the LCD eg. char x[10]="hello!";
-void HD44780::lcd_string(char *text)
+/*
+ * Strobes the E signal on the LCD to "accept" the byte in the '164.  The RS
+ * line determines wheter the byte is a character or a command.
+*/
+void HD44780_3W_8BIT::lcd_toggle_e(void)
+{
+    /* strobe E signal */
+    *m_pportE |= (1<<m_dqe);
+    _delay_us(450); 
+    *m_pportE &= ~(1<<m_dqe);
+}
+
+
+/*
+ * Loads the byte in the '164 shift register into the LCD as a command. The
+ * '164 should already be loaded with the data using lcd_load_byte().
+*/
+void HD44780_3W_8BIT::lcd_send_cmd(void)
+{
+    /* Data in '164 is a command, so RS must be low (0) */
+    *m_pportRsData &= ~(1<<m_dqrsdata);
+    lcd_toggle_e();
+    _delay_us(40);
+}
+
+/*
+ * Loads the byte in the '164 shift register into the LCD as a character. The
+ * '164 should already be loaded with the data using lcd_load_byte().
+*/
+void HD44780_3W_8BIT::lcd_send_char(void)
+{
+    /* Data in '164 is a character, so RS must be high (1) */
+    *m_pportRsData |= (1<<m_dqrsdata);
+    lcd_toggle_e();
+    _delay_us(40);
+}
+
+/*
+ * Content display
+ * Loads the byte into the shift register and then sends it to the LCD as a char
+ * Parameters:
+ *      c               The byte (character) to display
+*/
+void HD44780_3W_8BIT::lcd_char(const char c)
+{
+	if (c=='\n') {
+		if (m_nCurrentLine >= LCD_LINES - 1)
+			lcd_cursor_setline(0);
+		else
+			lcd_cursor_setline(m_nCurrentLine+1);
+	} else {
+		lcd_load_byte(c);
+		lcd_send_char();
+	}		
+}
+
+/*
+ * Content display
+ * Calls lcd_char to sent a complete string to the LCD
+ */
+void HD44780_3W_8BIT::lcd_string(char *text)
 {
 	char c;
-	while ((c = *text++))
-		lcd_char(c);
+	while ( (c = *text++) )  lcd_char(c);
 }
 
-void HD44780::lcd_string_format(char *szFormat, ...)
+/*
+ * Content display
+ * Shows a formatted string on the LCD
+ */
+void HD44780_3W_8BIT::lcd_string_format(char *szFormat, ...)
 {
 	char szBuffer[256]; //in this buffer we form the message
 	int NUMCHARS = sizeof(szBuffer) / sizeof(szBuffer[0]);
@@ -206,87 +164,102 @@ void HD44780::lcd_string_format(char *szFormat, ...)
 	va_start(pArgs, szFormat);
 	vsnprintf(szBuffer, NUMCHARS - 1, szFormat, pArgs);
 	va_end(pArgs);
-
+	
 	lcd_string(szBuffer);
 }
-//   Set cursor to specified position
-//           Input:    x  horizontal position  (0: left most position)
-//                     y  vertical position    (0: first line)
-void HD44780::lcd_gotoxy(uint8_t x, uint8_t y)
+
+/*
+ * Moves the cursor to the home position.
+*/
+void HD44780_3W_8BIT::lcd_cursor_home()
 {
-#if LCD_LINES == 1
-	lcd_instr((1 << LCD_DDRAM) + LCD_START_LINE1 + x);
-#elif LCD_LINES == 2
-	switch (y)
-	{
-	case 0:
-		lcd_instr((1 << LCD_DDRAM) + LCD_START_LINE1 + x);
-		break;
-	case 1:
-		lcd_instr((1 << LCD_DDRAM) + LCD_START_LINE2 + x);
-		break;
-	default:
-		break;
-	}
-#elif LCD_LINES == 4
-	switch (y)
-	{
-	case 0:
-		lcd_instr((1 << LCD_DDRAM) + LCD_START_LINE1 + x);
-		break;
-	case 1:
-		lcd_instr((1 << LCD_DDRAM) + LCD_START_LINE2 + x);
-		break;
-	case 2:
-		lcd_instr((1 << LCD_DDRAM) + LCD_START_LINE3 + x);
-		break;
-	case 3:
-		lcd_instr((1 << LCD_DDRAM) + LCD_START_LINE4 + x);
-		break;
-	default:
-		break;
-	}
-#endif
+	m_nCurrentLine = 0;
+	lcd_load_byte(LCD_CMD_HOME);
+    lcd_send_cmd();
 }
 
-//   Move cursor on specified line
-void HD44780::lcd_setline(uint8_t line)
+/*
+ * Moves the cursor to the specified position.
+ * Parameters:
+ *      line            Line (row)
+ *      pos             Position on that line (column)
+*/
+void HD44780_3W_8BIT::lcd_cursor_gotoxy(uint8_t line, uint8_t pos)
+{
+	m_nCurrentLine = line;
+    lcd_load_byte(line+pos);
+    lcd_send_cmd();
+}
+
+// PURPOSE:  Move cursor on specified line
+void HD44780_3W_8BIT::lcd_cursor_setline(uint8_t line)
 {
 	uint8_t addressCounter = 0;
-	switch (line)
+	switch(line)
 	{
-	case 0:
-		addressCounter = LCD_START_LINE1;
-		break;
-	case 1:
-		addressCounter = LCD_START_LINE2;
-		break;
-	case 2:
-		addressCounter = LCD_START_LINE3;
-		break;
-	case 3:
-		addressCounter = LCD_START_LINE4;
-		break;
-	default:
-		addressCounter = LCD_START_LINE1;
-		break;
+		case 0: addressCounter = LCD_START_LINE1; break;
+		case 1: addressCounter = LCD_START_LINE2; break;
+		case 2: addressCounter = LCD_START_LINE3; break;
+		case 3: addressCounter = LCD_START_LINE4; break;
+		default:addressCounter = LCD_START_LINE1; break;
 	}
-	g_nCurrentLine = line;
+	m_nCurrentLine = line;
+	
 
-	lcd_instr((1 << LCD_DDRAM) + addressCounter);
+	lcd_load_byte((1<<LCD_DDRAM)+addressCounter);
+	lcd_send_cmd();
 }
 
-//   Clear display and set cursor to home position
-void HD44780::lcd_clrscr(void)
+
+void HD44780_3W_8BIT::lcd_clrscr() {
+	m_nCurrentLine = 0;
+	lcd_load_byte(LCD_CMD_CLEAR);
+	lcd_send_cmd();
+}
+
+/*
+ * Initializes the LCD.  Should be called during the initialization of the 
+ * program.
+*/
+void HD44780_3W_8BIT::lcd_init()
 {
-	g_nCurrentLine = 0;
-	lcd_instr(LCD_CMD_CLEAR);
-	_delay_us(500);
-}
-
-//   Set cursor to home position
-void HD44780::lcd_cursor_home(void)
-{
-	g_nCurrentLine = 0;
-	lcd_instr(LCD_CMD_HOME);
-}
+	m_nCurrentLine = 0;
+    /* 20ms delay while LCD powers on */
+    _delay_ms(16);	   
+        
+    /* Write 0x30 to LCD and wait 5 mS for the instruction to complete */
+    lcd_load_byte( 0x30);
+    lcd_send_cmd();
+    _delay_ms(5);
+        
+    /* Write 0x30 to LCD and wait 160 uS for instruction to complete */
+    lcd_load_byte( 0x30);
+    lcd_send_cmd();
+    _delay_us(120);
+        
+    /* Write 0x30 AGAIN to LCD and wait 160 uS */
+    lcd_load_byte( 0x30);
+    lcd_send_cmd();
+    _delay_us(120);
+        
+    /* Set function and wait 40uS */
+    lcd_load_byte(LCD_FUNCTION_8BIT_2LINE); //function
+    lcd_send_cmd();
+        
+    /* Turn off the display and wait 40uS */
+    lcd_load_byte(LCD_CMD_OFF);    
+    lcd_send_cmd();
+        
+    /* Clear display and wait 1.64mS */
+    lcd_load_byte(LCD_CMD_CLEAR);    
+    lcd_send_cmd();
+    _delay_ms(2);
+        
+    /* Set entry mode and wait 40uS */
+    lcd_load_byte(LCD_CMD_ENTRY_INC);    //entry mode
+    lcd_send_cmd();
+        
+    /* Turn display back on and wait 40uS */
+    lcd_load_byte(LCD_CMD_ON);    
+    lcd_send_cmd();
+};

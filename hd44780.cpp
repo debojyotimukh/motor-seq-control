@@ -1,5 +1,5 @@
 /*
-    File:       3w_HD44780_8bit.cpp
+    File:       HD44780.cpp
     Version:    0.1.0
     Date:       Feb. 21, 2013
 	License:	GPL v2

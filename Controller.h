@@ -9,7 +9,7 @@ class Controller{
     static const uint8_t SYS_READY= 0x00;
 
     public:
-        void Init(Motor *motor,IC_74hc148 *encoder,HD44780 *lcd);
+        void Init(Motor *motor,IC_74hc148 *encoder,HD44780_3W_8BIT *lcd);
         void get_ready();
     private:
         static const int DELAY_TIME=2000;

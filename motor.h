@@ -1,25 +1,26 @@
 #include<stdio.h>
+#include<stdint.h>
 
 class Motor{
     static const int MOTOR_RUN=0x01; //Run flag
     static const int MOTOR_IDLE=0x00; //Idle flag
 
     private:
-        volatile __uint8_t* Port2DDR(volatile __uint8_t *port){return port-1;}
-        volatile __uint8_t *m_pport_a, *m_pport_b;
-        __uint8_t m_dq_a,m_dq_b;
+        volatile uint8_t* Port2DDR(volatile uint8_t *port){return port-1;}
+        volatile uint8_t *m_pport_a, *m_pport_b;
+        uint8_t m_dq_a,m_dq_b;
         
-        __uint8_t m_status;
+        uint8_t m_status;
     public:
-        void Init(volatile __uint8_t *m_pport_pos,__uint8_t m_dq_pos,
-                    volatile __uint8_t *m_port_neg,__uint8_t m_dq_neg);
+        void Init(volatile uint8_t *m_pport_pos,uint8_t m_dq_pos,
+                    volatile uint8_t *m_port_neg,uint8_t m_dq_neg);
         void start();
         void stop();
         bool is_running();
 };
 //Class initialization
-void Motor::Init(volatile __uint8_t *m_port_pos, __uint8_t m_dq_pos,
-                    volatile __uint8_t *m_port_neg,__uint8_t m_dq_neg)
+void Motor::Init(volatile uint8_t *m_port_pos, uint8_t m_dq_pos,
+                    volatile uint8_t *m_port_neg,uint8_t m_dq_neg)
 {
     //save globals
     m_pport_a=m_port_pos;

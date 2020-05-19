@@ -29,7 +29,7 @@
 
 #pragma once
 #include <stdio.h>
-#include "../timeout.h"
+#include "timeout.h"
 
 class HD44780
 {

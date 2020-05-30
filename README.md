@@ -9,6 +9,13 @@ especially in belt conveyers.
 ![conveyor-belt](conveyor-belt.jpg)
 ![sequence-table](sequence-table.jpg)
 
+### Motor driver
+L293 is a motor driver IC which employs the H bridge principle. One L293 can control two
+5V DC motors.
+### LCD driver
+
+### Sensor interface
+
 ## Compilation
 
 ## Schematic

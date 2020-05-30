@@ -6,7 +6,8 @@ Sequential control makes motors to start or stop in a pre-determined order. One 
 start until some other motor is already in operation, sequential control have many industrial
 applications like in Air-condition and other compressor driven equipments, hydraulic press and
 especially in belt conveyers.
-![coveyor-belt]()
+![conveyor-belt](conveyor-belt.jpg)
+![sequence-table](sequence-table.jpg)
 
 ## Compilation
 
